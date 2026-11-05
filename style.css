@@ -1,0 +1,119 @@
+:root {
+  --paper: #F4F6F3;
+  --white: #FFFFFF;
+  --ink: #1D2B2F;
+  --ink-2: #5A686C;
+  --rule: #D8DED9;
+  --sign: #F2C500;
+  --lake: #2D6E8E;
+  --shadow: 0 6px 24px rgba(29, 43, 47, .20), 0 1px 3px rgba(29, 43, 47, .18);
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 16px; line-height: 1.4; color: var(--ink); background: var(--paper);
+  -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%;
+}
+button, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* Téléphone : la carte en haut, la liste dessous */
+.app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+.mapwrap { position: relative; flex: 0 0 52%; min-height: 0; }
+#map { position: absolute; inset: 0; z-index: 0; background: #E6EBE7; }
+.panel { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; border-top: 1px solid var(--rule); padding-bottom: env(safe-area-inset-bottom); }
+.leaflet-container { font-family: inherit; }
+
+.basemaps {
+  position: absolute; z-index: 600; right: 10px; top: calc(10px + env(safe-area-inset-top)); display: flex; gap: 2px;
+  background: var(--white); border-radius: 8px; padding: 3px; box-shadow: 0 1px 4px rgba(29, 43, 47, .28);
+}
+.basemaps button { border: 0; background: none; min-height: 36px; padding: 6px 10px; border-radius: 6px; font-size: 14px; }
+.basemaps button[aria-pressed="true"] { background: var(--ink); color: var(--white); }
+
+/* Panneau */
+.head { padding: 16px 16px 12px; }
+h1 { font-size: 24px; line-height: 1.15; letter-spacing: -0.01em; margin: 0 0 10px; }
+.recap-row { margin-bottom: 12px; }
+.tag {
+  display: inline-block; font-weight: 700; font-size: 14px; line-height: 1.2; padding: 4px 20px 4px 9px; color: #111;
+  background: var(--sign); clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%);
+}
+.recap-row.swim .tag { background: var(--lake); color: #fff; }
+.nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 12px; margin: 8px 0 0; }
+.nums div { display: flex; flex-direction: column-reverse; min-width: 0; }
+.nums dd { margin: 0; font-size: 22px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.nums dt { font-size: 13px; color: var(--ink-2); margin-top: 2px; }
+.hint { margin: 0 0 12px; color: var(--ink-2); }
+
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 8px 14px; border-radius: 6px; cursor: pointer;
+  font-weight: 600; font-size: 15px; border: 1.5px solid var(--ink); background: transparent;
+}
+.btn.primary { background: var(--ink); color: var(--white); }
+.file { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+.file:focus-visible + .btn, .btn:focus-within { outline: 2px solid var(--ink); outline-offset: 2px; }
+.status { margin: 10px 0 0; font-size: 14px; color: var(--ink-2); }
+.status:empty { display: none; }
+
+.filters { padding: 0 16px 12px; border-bottom: 1px solid var(--rule); display: grid; gap: 10px; }
+.filters[hidden] { display: none; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 5px 11px; border-radius: 999px;
+  border: 1px solid var(--rule); background: var(--white); font-size: 14px;
+}
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--white); border-color: var(--ink); }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.year { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-2); }
+.year select { font-size: 16px; color: var(--ink); background: var(--white); border: 1px solid var(--rule); border-radius: 6px; padding: 4px 6px; }
+
+.list { list-style: none; margin: 0; padding: 0; }
+.item {
+  display: grid; grid-template-columns: 4px minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; min-height: 56px;
+  text-align: left; background: none; border: 0; border-bottom: 1px solid var(--rule); padding: 9px 16px 9px 12px; cursor: pointer;
+}
+.item[aria-current="true"] { background: var(--white); }
+.bar { align-self: stretch; border-radius: 2px; }
+.item-name { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item-date { display: block; font-size: 13px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item-num { text-align: right; font-size: 14px; color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.item-num span { display: block; }
+.item-num span:first-child { color: var(--ink); font-weight: 500; }
+.empty { padding: 14px 16px; color: var(--ink-2); }
+
+.foot { padding: 12px 16px 18px; font-size: 13px; color: var(--ink-2); }
+.foot p { margin: 0 0 6px; }
+.linkbtn { background: none; border: 0; padding: 4px 0; color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; font-size: 13px; cursor: pointer; }
+.linkbtn[hidden] { display: none; }
+
+/* Fiche d'une sortie, sur la carte */
+.card {
+  position: absolute; z-index: 650; left: 8px; right: 8px; bottom: 8px; max-height: calc(100% - 16px); overflow: auto;
+  background: var(--white); border-radius: 10px; box-shadow: var(--shadow); padding: 10px 10px 12px;
+}
+.card[hidden] { display: none; }
+.sign {
+  margin-right: 42px; padding: 7px 30px 7px 11px; background: var(--sign); color: #111; font-weight: 700;
+  clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 50%, calc(100% - 18px) 100%, 0 100%);
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+}
+.card.swim .sign { background: var(--lake); color: #fff; }
+.sign-name { min-width: 0; font-size: 16px; line-height: 1.15; overflow-wrap: anywhere; }
+.sign-time { white-space: nowrap; font-size: 15px; font-variant-numeric: tabular-nums; }
+.close { position: absolute; top: 8px; right: 8px; width: 36px; height: 36px; border-radius: 50%; border: 0; background: var(--paper); font-size: 20px; line-height: 1; cursor: pointer; }
+.card-when { margin: 8px 2px 0; font-size: 14px; color: var(--ink-2); }
+.card-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 8px 2px 0; }
+.card-stats dt { font-size: 12.5px; color: var(--ink-2); }
+.card-stats dd { margin: 0; font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Ordinateur ou tablette : la liste à gauche */
+@media (min-width: 760px) {
+  .app { flex-direction: row-reverse; }
+  .mapwrap { flex: 1 1 auto; min-width: 0; }
+  .panel { flex: 0 0 370px; border-top: 0; border-right: 1px solid var(--rule); }
+  .card { left: auto; right: 12px; bottom: 24px; width: 360px; }
+}

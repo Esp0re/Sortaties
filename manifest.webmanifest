@@ -1,0 +1,10 @@
+{
+  "name": "Sortaties",
+  "short_name": "Sortaties",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F4F6F3",
+  "theme_color": "#1D2B2F",
+  "icons": [{ "src": "icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }]
+}
