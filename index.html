@@ -28,6 +28,10 @@
       <button class="close" id="cardClose" type="button" aria-label="Fermer la fiche">×</button>
       <p class="card-when" id="cardWhen"></p>
       <dl class="card-stats" id="cardStats"></dl>
+      <details class="card-more" id="cardMore">
+        <summary>Plus de stats</summary>
+        <dl class="card-stats" id="cardMoreStats"></dl>
+      </details>
     </section>
   </main>
 
@@ -36,7 +40,7 @@
       <h1>Sortaties</h1>
       <div id="recap"></div>
       <div class="actions">
-        <label class="btn primary" for="dirInput"><span id="dirLabel">Choisir le dossier</span></label>
+        <label class="btn primary" for="dirInput"><span id="dirLabel">Dossier d’une personne</span></label>
         <input class="file" type="file" id="dirInput" webkitdirectory multiple>
         <label class="btn" for="fileInput">Choisir des fichiers</label>
         <input class="file" type="file" id="fileInput" multiple>
@@ -46,10 +50,20 @@
 
     <div class="filters" id="filters" hidden>
       <div class="chips" id="people" role="group" aria-label="Filtrer par personne"></div>
-      <label class="year">Année
-        <select id="year"><option value="">Toutes</option></select>
-      </label>
+      <div class="selects">
+        <label class="year">Année
+          <select id="year"><option value="">Toutes</option></select>
+        </label>
+        <label class="year">Catégorie
+          <select id="cat"><option value="">Toutes</option></select>
+        </label>
+      </div>
     </div>
+
+    <details class="more" id="more" hidden>
+      <summary>Records et stats</summary>
+      <div id="stats"></div>
+    </details>
 
     <ol class="list" id="list"></ol>
 
