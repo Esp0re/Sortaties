@@ -12,9 +12,10 @@ const tick = () => new Promise(r => setTimeout(r, 0));
 const OUT_RE = /\.(gpx|fit|zip|tcx)$/i;
 const SKIP_DIR = /^(photos|stats|api-nage)$/i;
 const PALETTE = ['#2D6E8E', '#7A4E9E', '#2F8558', '#C9820A', '#3E5FD6', '#B04A7C', '#5E7A23', '#0E8C84', '#8B6A3E', '#55606B'];
-const CATEGORIES = { marche: 'Marche', rando: 'Rando', ski_rando: 'Ski de rando', ski_fond: 'Ski de fond', nage: 'Eau libre', nage_piscine: 'Piscine' };
+const CATEGORIES = { marche: 'Marche', rando: 'Rando', ski_rando: 'Ski de rando', ski_fond: 'Ski de fond', nage: 'Eau libre', nage_piscine: 'Piscine', none: 'Sans catégorie' };
 
-const state = { items: new Map(), person: null, year: '', selected: null, colors: new Map(), visible: [] };
+const RECORD_V = 2;   // à augmenter quand une sortie gardée en mémoire gagne de nouveaux champs
+const state = { items: new Map(), person: null, year: '', cat: '', selected: null, colors: new Map(), visible: [] };
 
 /* ---------- Formats ---------- */
 const nf0 = new Intl.NumberFormat('fr-CH', { maximumFractionDigits: 0 });
@@ -28,7 +29,20 @@ function hours(s) {
   if (m === 60) { h++; m = 0; }
   return h ? `${h} h ${String(m).padStart(2, '0')}` : `${m} min`;
 }
-function pace(s) { return s == null ? '—' : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`; }
+function clock(s) {
+  if (s == null) return '—';
+  s = Math.round(s);
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = String(s % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${x}` : `${m}:${x}`;
+}
+const speed = v => v == null ? null : nf1.format(v) + ' km/h';
+const vert = v => v == null ? null : nf0.format(Math.round(v)) + ' m/h';
+const normText = p => { const v = Math.round(Math.abs(p) * 100); return v < 1 ? 'dans la norme' : `${v} % plus ${p > 0 ? 'rapide' : 'lent'}`; };
+const vamOf = (t, side) => t[side] && t[side].vam30 ? t[side].vam30 : null;
+const vamBest = side => t => { const v = vamOf(t, side); return v ? v.best : null; };
+const isSki = t => /^ski/.test(t.category || '');
+const speedLabel = t => isSki(t) ? 'Vitesse' : 'Vitesse de marche';
+const catKey = t => t.category || 'none';
 const yearOf = t => t.start ? new Date(t.start).getFullYear() : null;
 const sum = (a, f) => a.reduce((s, t) => s + (f(t) || 0), 0);
 const plural = (n, one, many) => n === 1 ? one : many;
@@ -133,7 +147,7 @@ function renderRecap() {
   const box = $('#recap');
   box.replaceChildren();
   if (!state.items.size) {
-    box.append(el('p', 'hint', 'Choisis ton dossier dans iCloud Drive. Tes sous-dossiers restent tels quels ; le dossier photos est ignoré.'));
+    box.append(el('p', 'hint', 'Dans iCloud Drive, entre dans le dossier d’une personne, puis touche Ouvrir. Recommence pour chaque personne. Évite le dossier principal : l’iPhone copierait aussi toutes les photos.'));
     return;
   }
   const land = state.visible.filter(t => !t.isSwim), water = state.visible.filter(t => t.isSwim);
@@ -150,6 +164,9 @@ function renderFilters() {
   if (state.person !== null && !people.includes(state.person)) state.person = null;
   const years = [...new Set(all.map(yearOf).filter(Boolean))].sort((a, b) => b - a);
   if (state.year && !years.includes(+state.year)) state.year = '';
+  const cats = Object.keys(CATEGORIES).filter(c => all.some(t => catKey(t) === c));
+  if (all.some(t => catKey(t) === 'none')) cats.push('none');
+  if (state.cat && !cats.includes(state.cat)) state.cat = '';
 
   $('#filters').hidden = !all.length;
   const chips = $('#people');
@@ -170,6 +187,9 @@ function renderFilters() {
   const sel = $('#year');
   sel.replaceChildren(new Option('Toutes', ''), ...years.map(y => new Option(String(y), String(y))));
   sel.value = state.year;
+  const catSel = $('#cat');
+  catSel.replaceChildren(new Option('Toutes', ''), ...cats.map(c => new Option(CATEGORIES[c], c)));
+  catSel.value = state.cat;
 }
 function renderList() {
   const box = $('#list');
@@ -202,27 +222,134 @@ function renderCard() {
   $('#cardName').textContent = t.name;
   $('#cardTime').textContent = hours(t.moving);
   $('#cardWhen').textContent = whenText(t);
-  const cells = t.isSwim
-    ? [statCell('Distance', km(t.distance)), statCell('Allure /100 m', pace(t.pace100)), statCell('En mouvement', hours(t.moving))]
-    : [statCell('Distance', km(t.distance)), statCell('Montée', metres(t.gain)), statCell('Point haut', metres(t.eleMax))];
-  $('#cardStats').replaceChildren(...cells);
+  const { main, more } = cardCells(t);
+  $('#cardStats').replaceChildren(...main);
+  $('#cardMoreStats').replaceChildren(...more);
+  $('#cardMore').hidden = !more.length;
+}
+function cells(rows) { return rows.filter(r => r[1] != null).map(r => statCell(r[0], r[1])); }
+function cardCells(t) {
+  const hr = t.hrAvg == null ? null : `${nf0.format(t.hrAvg)} bpm`;
+  if (t.isSwim) return {
+    main: cells([['Distance', km(t.distance)], ['Allure /100 m', t.pace100 == null ? null : clock(t.pace100)], ['En mouvement', hours(t.moving)],
+      ['Meilleur 100 m', t.best100 == null ? null : clock(t.best100)], ['Meilleur 500 m', t.best500 == null ? null : clock(t.best500)], ['Meilleur 1 000 m', t.best1000 == null ? null : clock(t.best1000)]]),
+    more: cells([['Distance par mouvement', t.dps == null ? null : t.dps.toFixed(2).replace('.', ',') + ' m'], ['SWOLF (25 m)', t.swolf25 == null ? null : nf1.format(t.swolf25)],
+      ['Longueurs', t.lengths == null ? null : `${nf0.format(t.lengths)} × ${nf0.format(t.poolLength)} m`], ['Eau', t.waterTemp == null ? null : nf1.format(t.waterTemp) + ' °C'],
+      ['Pouls moyen', hr], ['Pouls max', t.hrMax == null ? null : `${nf0.format(t.hrMax)} bpm`]])
+  };
+  const up = t.up || {}, down = t.down || {}, p = t.pauses || {};
+  return {
+    main: cells([['Distance', km(t.distance)], ['Montée', metres(t.gain)], [speedLabel(t), speed(t.speed)],
+      ['VAM30 montée', vert(vamBest('up')(t))], ['VAM30 descente', vert(vamBest('down')(t))], ['Point haut', metres(t.eleMax)]]),
+    more: cells([['Descente', t.loss == null ? null : metres(t.loss)], ['À plat, 30 min', speed(t.flat30 && t.flat30.best)],
+      ['Vitesse verticale montée', vert(up.vzCum)], ['Rythme / norme', t.norm == null ? null : normText(t.norm)],
+      ['Pouls moyen', hr], ['Pouls max', t.hrMax == null ? null : `${nf0.format(t.hrMax)} bpm`],
+      ['Pente max', up.slopeMax == null ? null : `${nf0.format(up.slopeMax)} % · ${nf0.format(up.angleMax)}°`],
+      ['Plus longue montée', t.climbMax && t.climbMax.gain ? metres(t.climbMax.gain) : null],
+      ['Pauses', p.count ? `${p.count}, max ${hours(p.max)}` : null], ['Au-dessus de 2 000 m', t.above2000 ? hours(t.above2000) : null]])
+  };
+}
+
+/* ---------- Records et stats, sorties affichées, catégorie par catégorie ---------- */
+const best = (arr, f, low) => arr.reduce((b, t) => {
+  const v = f(t);
+  if (v == null || !isFinite(v)) return b;
+  return !b || (low ? v < f(b) : v > f(b)) ? t : b;
+}, null);
+function fact(label, value, t, sub) {
+  const d = el('div', 'fact');
+  d.append(el('span', 'fact-label', label), el('span', 'fact-value', value));
+  if (sub) d.append(el('span', 'fact-sub', sub));
+  if (t) {
+    const b = el('button', 'fact-link', t.name);
+    b.type = 'button';
+    b.addEventListener('click', () => select(t.key, true));
+    d.append(b);
+  }
+  return d;
+}
+function record(out, label, arr, f, fmt, low) {
+  const t = best(arr, f, low);
+  if (t) out.push(fact(label, fmt(f(t)), t));
+}
+/* Moyenne des fenêtres de 30 min : Σ (moyenne × nombre) / Σ nombre */
+function vamMean(arr, side) {
+  let s = 0, n = 0;
+  for (const t of arr) { const v = vamOf(t, side); if (v && v.n) { s += v.mean * v.n; n += v.n; } }
+  return n ? { mean: s / n, n } : null;
+}
+/* Rythme de plusieurs sorties : on additionne les temps de norme et les temps en mouvement, puis on compare */
+function normOf(arr) {
+  const ok = arr.filter(t => t.din && t.moving);
+  if (!ok.length) return null;
+  if (ok.length === 1 && ok[0].norm != null) return ok[0].norm;
+  const din = sum(ok, t => t.din);
+  return (din - sum(ok, t => t.moving)) / din;
+}
+function landFacts(arr) {
+  const out = [];
+  const up = best(arr, vamBest('up')), m = vamMean(arr, 'up');
+  if (up) out.push(fact('Meilleure VAM30 en montée', vert(vamBest('up')(up)), up, m ? `moyenne ${nf0.format(m.mean)} m/h sur ${m.n} ${plural(m.n, 'fenêtre', 'fenêtres')}` : ''));
+  record(out, 'Meilleure VAM30 en descente', arr, vamBest('down'), vert);
+  const moved = arr.filter(t => t.moving && t.distance);
+  if (moved.length) out.push(fact(speedLabel(arr[0]), speed(sum(moved, t => t.distance) / sum(moved, t => t.moving) * 3.6), null, 'moyenne en mouvement'));
+  record(out, 'Vitesse à plat, 30 min', arr, t => t.flat30 && t.flat30.best, speed);
+  const n = normOf(arr);
+  if (n != null) out.push(fact('Rythme', normText(n), null, 'par rapport à la norme DIN 33466'));
+  record(out, 'Le point le plus haut', arr, t => t.eleMax, metres);
+  record(out, 'La plus grosse montée', arr, t => t.gain, metres);
+  record(out, 'La plus longue', arr, t => t.distance, km);
+  return out;
+}
+function waterFacts(arr, c) {
+  const out = [];
+  const paced = arr.filter(t => t.moving && (t.distanceValid ?? t.distance));
+  const dist = sum(paced, t => t.distanceValid ?? t.distance);
+  if (dist) out.push(fact('Allure moyenne', clock(sum(paced, t => t.moving) / dist * 100) + ' /100 m'));
+  record(out, 'Meilleur 100 m', arr, t => t.best100, clock, true);
+  record(out, 'Meilleur 500 m', arr, t => t.best500, clock, true);
+  record(out, 'Meilleur 1 000 m', arr, t => t.best1000, clock, true);
+  record(out, 'La plus longue', arr, t => t.distance, km);
+  if (c === 'nage_piscine') record(out, 'Meilleur SWOLF (25 m)', arr, t => t.swolf25, v => nf1.format(v), true);
+  else {
+    record(out, 'L’eau la plus chaude', arr, t => t.waterTemp, v => nf1.format(v) + ' °C');
+    if (new Set(arr.map(t => t.waterTemp).filter(v => v != null)).size > 1) record(out, 'L’eau la plus froide', arr, t => t.waterTemp, v => nf1.format(v) + ' °C', true);
+  }
+  return out;
+}
+function renderStats() {
+  const box = $('#stats');
+  box.replaceChildren();
+  $('#more').hidden = !state.visible.length;
+  for (const c of Object.keys(CATEGORIES)) {
+    const arr = state.visible.filter(t => catKey(t) === c);
+    if (!arr.length) continue;
+    const facts = arr[0].isSwim ? waterFacts(arr, c) : landFacts(arr);
+    if (!facts.length) continue;
+    const sec = el('section', 'cat'), grid = el('div', 'facts'), n = arr.length;
+    sec.append(el('h2', '', `${CATEGORIES[c]} · ${nf0.format(n)} ${plural(n, 'sortie', 'sorties')}`));
+    grid.append(...facts);
+    sec.append(grid);
+    box.append(sec);
+  }
 }
 function render(refit) {
   renderFilters();
   state.visible = [...state.items.values()]
-    .filter(t => (state.person === null || t.person === state.person) && (!state.year || yearOf(t) === +state.year))
+    .filter(t => (state.person === null || t.person === state.person) && (!state.year || yearOf(t) === +state.year) && (!state.cat || catKey(t) === state.cat))
     .sort((a, b) => (b.start || 0) - (a.start || 0));
   if (state.selected && !state.visible.some(t => t.key === state.selected)) state.selected = null;
   renderRecap();
+  renderStats();
   renderList();
   renderCard();
   drawTracks();
-  $('#dirLabel').textContent = state.items.size ? 'Actualiser le dossier' : 'Choisir le dossier';
   $('#clear').hidden = !state.items.size;
   if (refit) fit(state.visible);
 }
 function select(key, zoom) {
   state.selected = key;
+  $('#cardMore').open = false;
   document.querySelectorAll('.item').forEach(b => { if (b.dataset.key === key) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current'); });
   renderCard();
   drawChosen();
@@ -257,10 +384,18 @@ function describe(files) {
 const srcKey = (person, name) => person + '|' + name;
 function slim(s, e) {
   return {
-    key: srcKey(e.person, s.id || s.file || e.file.name), person: e.person, formulas: s.formulas, srcs: { [e.file.name]: e.sig },
+    key: srcKey(e.person, s.id || s.file || e.file.name), person: e.person, v: RECORD_V, formulas: s.formulas, srcs: { [e.file.name]: e.sig },
     name: s.name || e.file.name.replace(OUT_RE, ''), isSwim: !!s.isSwim, category: s.category || null,
     start: s.start ?? null, distance: s.distance ?? null, moving: s.moving ?? null, gain: s.gain ?? null,
-    eleMax: s.eleMax ?? null, pace100: s.pace100 ?? null, line: s.line || [], bounds: s.bounds || null
+    eleMax: s.eleMax ?? null, pace100: s.pace100 ?? null, line: s.line || [], bounds: s.bounds || null,
+    /* à pied et à ski */
+    loss: s.loss ?? null, speed: s.avgSpeedKmh ?? null, flat30: s.flat30 || null, din: s.din ?? null, norm: s.pace ?? null,
+    hrAvg: s.hrAvg ?? null, hrMax: s.hrMax ?? null, pauses: s.pauses || null, above2000: s.above2000 ?? null, climbMax: s.climbMax || null,
+    up: s.up ? { vam30: s.up.vam30, vzCum: s.up.vzCum, slopeMax: s.up.slopeMax, angleMax: s.up.angleMax } : null,
+    down: s.down ? { vam30: s.down.vam30 } : null,
+    /* nage */
+    distanceValid: s.distanceValid ?? null, best100: s.best100 ?? null, best500: s.best500 ?? null, best1000: s.best1000 ?? null,
+    dps: s.dps ?? null, swolf25: s.swolf25 ?? null, waterTemp: s.waterTemp ?? null, lengths: s.lengths ?? null, poolLength: s.poolLength ?? null
   };
 }
 async function loadFiles(fileList, wholeFolder) {
@@ -277,7 +412,7 @@ async function loadFiles(fileList, wholeFolder) {
     const id = srcKey(e.person, e.file.name);
     seen.add(id);
     const k = known.get(id);
-    if (k && k.sig === e.sig && formulas.has(k.t.formulas)) continue;
+    if (k && k.sig === e.sig && k.t.v === RECORD_V && formulas.has(k.t.formulas)) continue;
     status.textContent = `Lecture ${done} sur ${entries.length}…`;
     await tick();
     try {
@@ -322,6 +457,7 @@ onPick($('#dirInput'), true);
 onPick($('#fileInput'), false);
 
 $('#year').addEventListener('change', e => { state.year = e.target.value; render(true); });
+$('#cat').addEventListener('change', e => { state.cat = e.target.value; render(true); });
 $('#cardClose').addEventListener('click', () => { state.selected = null; render(false); });
 $('#clear').addEventListener('click', async () => {
   if (!confirm('Effacer les sorties gardées sur cet appareil ? Tes fichiers dans iCloud ne changent pas.')) return;
@@ -342,5 +478,6 @@ $('#clear').addEventListener('click', async () => {
     $('#status').textContent = 'Ce navigateur ne garde rien : choisis le dossier à chaque visite.';
   }
   render(state.items.size > 0);
+  if ([...state.items.values()].some(t => t.v !== RECORD_V)) $('#status').textContent = 'Nouvelles stats : rouvre le dossier de chaque personne pour les calculer.';
 })();
 })();
